@@ -1,0 +1,13 @@
+{{#if containerConfig.docker.dockerCopyFiles.enable}}
+    @docker:CopyFiles {
+        files: [
+            {{#containerConfig.docker.dockerCopyFiles.files}}
+                { {{#if source}} source:"{{source}}", {{/if}}
+                  {{#if target}} target:"{{target}}", {{/if}}
+                  {{#if isBallerinaConf}} isBallerinaConf:{{isBallerinaConf}} {{/if}}
+                }{{#unless @last}},
+                {{/unless}}
+            {{/containerConfig.docker.dockerCopyFiles.files}}
+        ]
+    }
+{{/if}}

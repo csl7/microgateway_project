@@ -1,0 +1,19 @@
+NAME
+    micro-gw build - The build command generates a gateway distribution using the given project resources. 
+
+SYNOPSIS
+    micro-gw build <project> 
+
+DESCRIPTION
+    The build command generates a gateway distribution using the resources in the given project. The project should exist
+    in the current working directory.
+
+OPTIONS
+    -d
+    --deployment-config
+       <Optional>
+       Deployment configuration file for docker/kubernetes environments
+
+EXAMPLES
+    $ micro-gw build accounts-project
+

@@ -1,0 +1,147 @@
+import wso2/gateway;
+import ballerina/http;
+import ballerina/config;
+import ballerina/io;
+import ballerina/log;
+
+{{#if containerConfig.hasDocker}}import ballerinax/docker;{{/if}}
+{{#if containerConfig.kubernetes.kubernetesService.enable}}import ballerinax/kubernetes;{{/if}}
+
+//Throttle tier data initiation
+
+{{#if config.mutualSSL.certificateDetails}}
+    json ClientCerts ={{{config.mutualSSL.certificateDetails}}};
+{{else}}
+    json ClientCerts=null;
+{{/if}}
+
+
+
+// Get authentication filter
+gateway:PreAuthnFilter preAuthnFilter = new;
+// Subscription validation filter
+// Authorization filter
+gateway:OAuthzFilter authorizationFilter = gateway:getDefaultAuthorizationFilter();
+gateway:SubscriptionFilter subscriptionFilter = new;
+// Get deployed policies
+map<boolean> deployedPolicies = getDeployedPolicies();
+// Throttling filter
+gateway:ThrottleFilter throttleFilter = new(deployedPolicies);
+//get open API definition map
+map<json> openAPIs = <@untainted>getOpenAPIMapFromFile();
+// Validation filter
+//gateway:ValidationFilter validationFilter = new(openAPIs);
+// Analytics filter
+gateway:AnalyticsRequestFilter analyticsFilter = new;
+// Extension filter
+ExtensionFilter extensionFilter = new;
+
+http:ListenerConfiguration secureServiceEndpointConfiguration = { {{>http2}},
+                                                                           {{>mutualSSL}}
+                                                                           auth: {
+                                                                                authHandlers: gateway:getAuthHandlers(),
+                                                                                position: 1
+                                                                           },
+                                                                           filters:[preAuthnFilter, authorizationFilter, subscriptionFilter,throttleFilter,
+                                                                           analyticsFilter, extensionFilter]
+                                                                       };
+
+{{>docker}}
+{{>secureKubernetesIngress}}
+{{>kubernetesServiceHttps}}
+listener gateway:APIGatewaySecureListener apiSecureListener = new(9095, secureServiceEndpointConfiguration);
+
+http:ListenerConfiguration serviceEndpointConfiguration = { {{>http2}},
+                                                                     auth: {
+                                                                         authHandlers: gateway:getAuthHandlers(),
+                                                                         mandateSecureSocket: false,
+                                                                         position: 1
+                                                                     },
+                                                                     filters:[preAuthnFilter, authorizationFilter, subscriptionFilter,throttleFilter,
+                                                                     analyticsFilter, extensionFilter]
+                                                                 };
+
+{{>kubernetesIngress}}
+{{>kubernetesServiceHttp}}
+listener gateway:APIGatewayListener apiListener = new(9090, serviceEndpointConfiguration);
+
+
+{{>secureKubernetesIngress}}
+{{>kubernetesServiceToken}}
+listener http:Listener tokenListenerEndpoint = new (
+    {{#if containerConfig.kubernetes.secureKubernetesIngress.enable}}
+        9096, config = {
+        secureSocket: {
+            keyStore: {
+                path:  {{#if containerConfig.kubernetes.secureKubernetesIngress.keyStorePath}}
+                    "{{containerConfig.kubernetes.secureKubernetesIngress.keyStorePath}}",
+                {{else}}
+                    "${ballerina.home}/bre/security/ballerinaKeystore.p12",
+                {{/if}}
+                password: {{#if containerConfig.kubernetes.secureKubernetesIngress.keyStorePassword}}
+                    "{{containerConfig.kubernetes.secureKubernetesIngress.keyStorePassword}}"
+                {{else}}
+                    "ballerina"
+                {{/if}}
+            }
+        }
+    {{else if containerConfig.kubernetes.kubernetesService.enable}}
+        9096, config = {
+        host: gateway:getConfigValue(gateway:LISTENER_CONF_INSTANCE_ID, gateway:LISTENER_CONF_HOST, "localhost"),
+        secureSocket: {
+            keyStore: {
+                path: gateway:getConfigValue(gateway:LISTENER_CONF_INSTANCE_ID, gateway:LISTENER_CONF_KEY_STORE_PATH,
+                    "${ballerina.home}/bre/security/ballerinaKeystore.p12"),
+                password: gateway:getConfigValue(gateway:LISTENER_CONF_INSTANCE_ID,
+                    gateway:LISTENER_CONF_KEY_STORE_PASSWORD, "ballerina")
+            }
+        }
+    {{else if containerConfig.kubernetes.kubernetesServiceToken.enable}}
+            9096, config = {
+            host: gateway:getConfigValue(gateway:LISTENER_CONF_INSTANCE_ID, gateway:LISTENER_CONF_HOST, "localhost"),
+            secureSocket: {
+                keyStore: {
+                    path: gateway:getConfigValue(gateway:LISTENER_CONF_INSTANCE_ID, gateway:LISTENER_CONF_KEY_STORE_PATH,
+                        "${ballerina.home}/bre/security/ballerinaKeystore.p12"),
+                    password: gateway:getConfigValue(gateway:LISTENER_CONF_INSTANCE_ID,
+                        gateway:LISTENER_CONF_KEY_STORE_PASSWORD, "ballerina")
+                }
+            }
+    {{else}}
+        gateway:getConfigIntValue(gateway:LISTENER_CONF_INSTANCE_ID, gateway:TOKEN_LISTENER_PORT, 9096), config = {
+        host: gateway:getConfigValue(gateway:LISTENER_CONF_INSTANCE_ID, gateway:LISTENER_CONF_HOST, "localhost"),
+        secureSocket: {
+            keyStore: {
+                path: gateway:getConfigValue(gateway:LISTENER_CONF_INSTANCE_ID, gateway:LISTENER_CONF_KEY_STORE_PATH,
+                    "${ballerina.home}/bre/security/ballerinaKeystore.p12"),
+                password: gateway:getConfigValue(gateway:LISTENER_CONF_INSTANCE_ID,
+                    gateway:LISTENER_CONF_KEY_STORE_PASSWORD, "ballerina")
+            }
+        }
+    {{/if}}
+    }
+);
+
+public function getOpenAPIMapFromFile() returns @tainted map<json>{
+    map<json> openAPIMap = {};
+    string filePath = "./openAPIJsonConstants.json";
+    io:ReadableByteChannel|error rbc = io:openReadableFile(filePath);
+    if(rbc is io:ReadableByteChannel) {
+        io:ReadableCharacterChannel rch = new(rbc, "UTF8");
+        var result = rch.readJson();
+        if(result is map<json>) {
+            openAPIMap = result;
+        }
+        var closeResult = rch.close();
+        if (closeResult is error) {
+            log:printError("Error occurred while closing character stream", err = closeResult);
+        }
+    } else {
+        log:printError("Error occurred while reading the open API json file", err = rbc);
+    }
+    return openAPIMap;
+}
+
+
+
+
