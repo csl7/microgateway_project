@@ -7,7 +7,19 @@
 import ballerina/grpc;
 import ballerina/io;
 
-EventServiceClient analyticsClient = new("http://localhost:9806");
+// EventServiceClient analyticsClient = new("http://localhost:9806");
+
+
+EventServiceClient analyticsClient = new("https://localhost:9806", {
+    secureSocket:{
+            trustStore: {
+                  path: getConfigValue(LISTENER_CONF_INSTANCE_ID, TRUST_STORE_PATH,
+                      "/home/lahiru/Documents/Myproject/jballerinaForThrottling/product-microgateway/components/micro-gateway-core/target/extracted-distribution/jballerina-tools-1.0.0/bre/security/client-truststore.jks"),
+                  password: getConfigValue(LISTENER_CONF_INSTANCE_ID, TRUST_STORE_PASSWORD, "wso2carbon")
+            }
+        }
+});
+
 
 
 service EventServiceMessageListner = service {
