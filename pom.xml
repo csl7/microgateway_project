@@ -535,7 +535,7 @@
         <maven.antrun.plugin.version>1.8</maven.antrun.plugin.version>
         <maven.spotbugs.version>3.1.1</maven.spotbugs.version>
         <maven.checkstyle.plugin.version>3.0.0</maven.checkstyle.plugin.version>
-        <maven.checkstyle.version>8.18</maven.checkstyle.version>
+        <maven.checkstyle.version>8.29</maven.checkstyle.version>
         <jcip.annotations.version>1.0</jcip.annotations.version>
 
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
